@@ -715,13 +715,31 @@
         throw new Error("ERR_NO_IMAGE");
       }
 
-      const scale = Math.max(2, window.devicePixelRatio || 1);
-      return html2canvas(elements.frame, {
-        backgroundColor: null,
-        scale,
-        useCORS: true,
-        logging: false
-      });
+      // 临时移除 transform 以防止 html2canvas 偏移
+      const originalTransform = elements.frame.style.transform;
+      elements.frame.style.transform = "none";
+
+      try {
+        const scale = Math.max(2, window.devicePixelRatio || 1);
+        const canvas = await html2canvas(elements.frame, {
+          backgroundColor: null,
+          scale: scale,
+          useCORS: true,
+          logging: false,
+          allowTaint: true,
+          ignoreElements: (element) => {
+            // 忽略不在 frame 内部或者是控制界面的元素，防止重复渲染
+            if (element.classList.contains("stagger-card")) return true;
+            if (element.tagName === "BUTTON") return true; // 忽略 frame 内可能的按钮（如上传按钮）
+            if (element.id === "emptyState") return true; // 忽略空状态
+            return false;
+          }
+        });
+        return canvas;
+      } finally {
+        // 恢复 transform
+        elements.frame.style.transform = originalTransform;
+      }
     }
 
     async function canvasToBlob(canvas) {
@@ -737,10 +755,7 @@
     }
 
     async function handleCopy() {
-      if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
-        setStatusKey("statusCopyUnsupported", "error");
-        return;
-      }
+      if (!state.hasImage) return;
 
       elements.copyBtn.disabled = true;
       setCopyPhase("copying");
@@ -749,7 +764,10 @@
       try {
         const canvas = await renderToCanvas();
         const blob = await canvasToBlob(canvas);
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+
+        // 尝试写入剪贴板
+        const item = new ClipboardItem({ "image/png": blob });
+        await navigator.clipboard.write([item]);
 
         setCopyPhase("copied");
         elements.copyBtn.classList.add("copy-success");
@@ -760,10 +778,20 @@
           setCopyPhase("idle");
           syncButtons();
         }, 1200);
+
       } catch (error) {
+        console.error("Copy failed:", error);
         setCopyPhase("idle");
         syncButtons();
-        setStatusCustom(resolveErrorMessage(error, "statusCopyFailed"), "error");
+
+        // 针对 Safari 或其他浏览器拒绝权限的情况，自动降级为下载
+        if (error.name === "NotAllowedError" || error.message.includes("not allowed")) {
+          setStatusCustom(getText("statusCopyUnsupported"), "error");
+          // 延迟一下自动触发下载，体验更好
+          setTimeout(() => handleDownload(), 1500);
+        } else {
+          setStatusCustom(resolveErrorMessage(error, "statusCopyFailed"), "error");
+        }
       }
     }
 
