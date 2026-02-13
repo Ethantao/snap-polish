@@ -715,9 +715,12 @@
         throw new Error("ERR_NO_IMAGE");
       }
 
-      // 临时移除 transform 以防止 html2canvas 偏移
+      // 临时移除 transform 和 transition 以防止 html2canvas 偏移或捕获中间状态
       const originalTransform = elements.frame.style.transform;
+      const originalTransition = elements.frame.style.transition;
+
       elements.frame.style.transform = "none";
+      elements.frame.style.transition = "none";
 
       try {
         const scale = Math.max(2, window.devicePixelRatio || 1);
@@ -725,20 +728,13 @@
           backgroundColor: null,
           scale: scale,
           useCORS: true,
-          logging: false,
-          allowTaint: true,
-          ignoreElements: (element) => {
-            // 忽略不在 frame 内部或者是控制界面的元素，防止重复渲染
-            if (element.classList.contains("stagger-card")) return true;
-            if (element.tagName === "BUTTON") return true; // 忽略 frame 内可能的按钮（如上传按钮）
-            if (element.id === "emptyState") return true; // 忽略空状态
-            return false;
-          }
+          logging: false
         });
         return canvas;
       } finally {
-        // 恢复 transform
+        // 恢复样式
         elements.frame.style.transform = originalTransform;
+        elements.frame.style.transition = originalTransition;
       }
     }
 
