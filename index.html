@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapPolish - Screenshot Beautifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Space Grotesk", "ui-sans-serif", "sans-serif"],
+            mono: ["JetBrains Mono", "ui-monospace", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes pulse-ring {
+      0% {
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.35);
+      }
+      100% {
+        box-shadow: 0 0 0 14px rgba(74, 222, 128, 0);
+      }
+    }
+
+    .stagger-card {
+      opacity: 0;
+      animation: fade-up 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      animation-delay: var(--stagger-delay, 0ms);
+    }
+
+    .checkerboard {
+      background-color: #06080f;
+      background-image:
+        linear-gradient(45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+
+    input[type="range"] {
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(148, 163, 184, 0.35), rgba(71, 85, 105, 0.5));
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(241, 245, 249, 0.8);
+      background: radial-gradient(circle at 35% 30%, #dbeafe, #64748b);
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.5);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(241, 245, 249, 0.8);
+      background: radial-gradient(circle at 35% 30%, #dbeafe, #64748b);
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.5);
+    }
+
+    .copy-success {
+      animation: pulse-ring 800ms ease-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#020617] text-slate-100 antialiased">
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div class="absolute -left-32 top-12 h-80 w-80 rounded-full bg-cyan-500/20 blur-3xl"></div>
+    <div class="absolute -right-28 top-1/3 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl"></div>
+    <div class="absolute bottom-[-120px] left-1/3 h-80 w-80 rounded-full bg-slate-400/10 blur-3xl"></div>
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(30,41,59,0.6),rgba(2,6,23,0.96)_62%)]"></div>
+  </div>
+
+  <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6 lg:flex-row lg:px-8 lg:py-10">
+    <section class="stagger-card flex min-w-0 flex-1 flex-col rounded-3xl border border-white/10 bg-slate-900/35 p-4 shadow-2xl backdrop-blur-xl lg:p-6" style="--stagger-delay: 80ms;">
+      <header class="flex flex-col gap-2 border-b border-white/10 pb-4">
+        <h1 id="pageTitle" class="text-2xl font-semibold tracking-tight text-slate-50 lg:text-3xl">SnapPolish</h1>
+        <p id="introText" class="text-sm text-slate-300/90">
+          直接按 <span class="font-mono text-cyan-200">Cmd/Ctrl + V</span> 粘贴截图，或点击上传。所有参数实时生效，导出为高清 PNG。<br>
+          Paste with <span class="font-mono text-cyan-200">Cmd/Ctrl + V</span> or click upload. All controls update in real time and export high-resolution PNG.
+        </p>
+      </header>
+
+      <div id="previewStage" class="checkerboard mt-4 flex min-h-[460px] w-full min-w-0 flex-1 items-center justify-center overflow-auto rounded-2xl border border-white/10 p-8">
+        <div id="frame" class="relative inline-flex max-w-full flex-col items-center justify-center rounded-[30px] transition-all duration-200 ease-out">
+          <img id="shotImage" alt="Screenshot Preview" class="hidden max-w-full select-none object-contain">
+          <div id="emptyState" class="flex min-h-[280px] w-[640px] max-w-full flex-col items-center justify-center gap-5 rounded-[24px] border border-dashed border-slate-300/30 bg-slate-900/45 px-5 text-center text-slate-300">
+            <div class="space-y-2">
+              <p id="emptyTitle" class="text-base font-medium text-slate-100">等待截图粘贴 / Waiting for pasted screenshot</p>
+              <p id="emptyDesc" class="text-sm leading-relaxed text-slate-300/90">按下 Cmd+V / Ctrl+V 直接导入图片，或使用下方按钮上传。<br>Press Cmd+V / Ctrl+V to import an image, or use the upload button below.</p>
+            </div>
+            <button id="uploadTrigger" type="button" class="rounded-xl border border-cyan-300/45 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/20">
+              <span id="uploadTriggerLabel">点击上传 / Upload</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <input id="fileInput" type="file" accept="image/*" class="hidden">
+    </section>
+
+    <aside class="stagger-card w-full rounded-3xl border border-white/10 bg-slate-900/45 p-4 shadow-2xl backdrop-blur-xl lg:flex-none lg:w-[clamp(320px,24vw,350px)] lg:p-5" style="--stagger-delay: 180ms;">
+      <div class="space-y-5">
+        <section>
+          <h2 id="languageHeading" class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300/70">语言 / Language</h2>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" data-lang="zh" class="lang-btn rounded-xl border border-white/10 bg-slate-800/70 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-white/30">中文</button>
+            <button type="button" data-lang="en" class="lang-btn rounded-xl border border-white/10 bg-slate-800/70 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-white/30">English</button>
+          </div>
+        </section>
+
+        <section>
+          <h2 id="bgHeading" class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300/70">背景 / Background</h2>
+          <div id="bgPresetGroup" class="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" data-bg-id="liquidAurora" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: radial-gradient(circle at 12% 18%, #67e8f9 0%, rgba(103, 232, 249, 0.2) 26%, transparent 50%), radial-gradient(circle at 80% 8%, #a78bfa 0%, rgba(167, 139, 250, 0.3) 28%, transparent 52%), linear-gradient(135deg, #0f172a 0%, #0b1d3a 45%, #111827 100%);">Liquid Aurora</button>
+            <button type="button" data-bg-id="liquidCandy" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: radial-gradient(circle at 18% 15%, #fb7185 0%, rgba(251, 113, 133, 0.24) 26%, transparent 56%), radial-gradient(circle at 80% 78%, #f59e0b 0%, rgba(245, 158, 11, 0.28) 32%, transparent 58%), linear-gradient(140deg, #29113f 0%, #3f1647 48%, #1e1b4b 100%);">Liquid Candy</button>
+            <button type="button" data-bg-id="liquidNeon" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: radial-gradient(circle at 18% 12%, #22d3ee 0%, rgba(34, 211, 238, 0.25) 25%, transparent 50%), radial-gradient(circle at 85% 82%, #2dd4bf 0%, rgba(45, 212, 191, 0.26) 30%, transparent 56%), linear-gradient(135deg, #030712 0%, #0f172a 45%, #1f2937 100%);">Liquid Neon</button>
+            <button type="button" data-bg-id="appleBloom" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: radial-gradient(circle at 22% 16%, rgba(255,255,255,0.48) 0%, transparent 42%), radial-gradient(circle at 78% 78%, rgba(255,255,255,0.2) 0%, transparent 46%), linear-gradient(135deg, #1d4ed8 0%, #2563eb 30%, #0ea5e9 66%, #14b8a6 100%);">Apple Bloom</button>
+            <button type="button" data-bg-id="midnight" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: linear-gradient(140deg, #111827 0%, #1f2937 48%, #0f172a 100%);">Midnight</button>
+            <button type="button" data-bg-id="graphite" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: linear-gradient(135deg, #3f3f46 0%, #27272a 100%);">Graphite</button>
+            <button type="button" data-bg-id="macLight" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium text-slate-900 transition hover:border-white/30 hover:opacity-95" style="background: #d1d5db;">macOS Light</button>
+            <button type="button" data-bg-id="macDark" class="bg-preset rounded-xl border border-white/10 px-3 py-2 text-left text-xs font-medium transition hover:border-white/30 hover:opacity-95" style="background: #3a3a3c;">macOS Dark</button>
+            <button type="button" data-bg-id="transparent" class="bg-preset col-span-2 rounded-xl border border-white/20 bg-transparent px-3 py-2 text-left text-xs font-medium text-slate-100 transition hover:border-white/40">Transparent</button>
+          </div>
+          <p id="bgHint" class="mt-2 text-[11px] text-slate-400">包含液态流体渐变与 Apple 风格渐变背景。Includes liquid gradients and Apple-inspired gradient backgrounds.</p>
+        </section>
+
+        <section class="space-y-4">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label id="paddingLabel" for="paddingRange" class="text-sm text-slate-200">边距 / Padding</label>
+              <span id="paddingValue" class="font-mono text-xs text-cyan-200">32px</span>
+            </div>
+            <input id="paddingRange" type="range" min="20" max="220" value="32" class="w-full">
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label id="frameRadiusLabel" for="frameRadiusRange" class="text-sm text-slate-200">背景圆角 / Frame Radius</label>
+              <span id="frameRadiusValue" class="font-mono text-xs text-cyan-200">24px</span>
+            </div>
+            <input id="frameRadiusRange" type="range" min="0" max="80" value="24" class="w-full">
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label id="radiusLabel" for="radiusRange" class="text-sm text-slate-200">截图圆角 / Screenshot Radius</label>
+              <span id="radiusValue" class="font-mono text-xs text-cyan-200">12px</span>
+            </div>
+            <input id="radiusRange" type="range" min="0" max="56" value="12" class="w-full">
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label id="shadowLabel" for="shadowRange" class="text-sm text-slate-200">阴影 / Shadow</label>
+              <span id="shadowValue" class="font-mono text-xs text-cyan-200">36</span>
+            </div>
+            <input id="shadowRange" type="range" min="0" max="90" value="36" class="w-full">
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div class="flex flex-col items-start gap-3">
+            <div>
+              <p id="defaultsTitle" class="text-sm font-medium text-slate-100">默认设置 / Default Settings</p>
+              <p id="defaultsDesc" class="text-xs text-slate-400">恢复默认背景、边距、圆角和阴影 / Restore default background, padding, radii, and shadow</p>
+            </div>
+            <button id="resetBtn" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/35 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/20">
+              <span id="resetTrack" class="relative h-5 w-10 rounded-full bg-slate-600/80 transition-colors duration-300">
+                <span id="resetKnob" class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-slate-100 transition-transform duration-300"></span>
+              </span>
+              <span id="resetBtnLabel">一键重置 / Reset</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="space-y-3 border-t border-white/10 pt-4">
+          <h2 id="actionsHeading" class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300/70">操作 / Actions</h2>
+          <button id="copyBtn" type="button" class="flex w-full items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40">
+            <span id="copyBtnLabel">复制图片 / Copy Image</span>
+          </button>
+          <button id="downloadBtn" type="button" class="flex w-full items-center justify-center rounded-xl border border-sky-300/35 bg-sky-400/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-40">
+            <span id="downloadBtnLabel">下载图片 / Download PNG</span>
+          </button>
+          <p id="statusText" class="min-h-[20px] text-xs text-slate-300/85"></p>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const BACKGROUND_PRESETS = Object.freeze({
+      liquidAurora: {
+        css: "radial-gradient(circle at 12% 18%, #67e8f9 0%, rgba(103, 232, 249, 0.22) 26%, transparent 50%), radial-gradient(circle at 80% 8%, #a78bfa 0%, rgba(167, 139, 250, 0.3) 28%, transparent 52%), linear-gradient(135deg, #0f172a 0%, #0b1d3a 45%, #111827 100%)"
+      },
+      liquidCandy: {
+        css: "radial-gradient(circle at 18% 15%, #fb7185 0%, rgba(251, 113, 133, 0.24) 26%, transparent 56%), radial-gradient(circle at 80% 78%, #f59e0b 0%, rgba(245, 158, 11, 0.28) 32%, transparent 58%), linear-gradient(140deg, #29113f 0%, #3f1647 48%, #1e1b4b 100%)"
+      },
+      liquidNeon: {
+        css: "radial-gradient(circle at 18% 12%, #22d3ee 0%, rgba(34, 211, 238, 0.25) 25%, transparent 50%), radial-gradient(circle at 85% 82%, #2dd4bf 0%, rgba(45, 212, 191, 0.26) 30%, transparent 56%), linear-gradient(135deg, #030712 0%, #0f172a 45%, #1f2937 100%)"
+      },
+      appleBloom: {
+        css: "radial-gradient(circle at 22% 16%, rgba(255, 255, 255, 0.48) 0%, transparent 42%), radial-gradient(circle at 78% 78%, rgba(255, 255, 255, 0.2) 0%, transparent 46%), linear-gradient(135deg, #1d4ed8 0%, #2563eb 30%, #0ea5e9 66%, #14b8a6 100%)"
+      },
+      midnight: {
+        css: "linear-gradient(140deg, #111827 0%, #1f2937 48%, #0f172a 100%)"
+      },
+      graphite: {
+        css: "linear-gradient(135deg, #3f3f46 0%, #27272a 100%)"
+      },
+      macLight: {
+        css: "#d1d5db"
+      },
+      macDark: {
+        css: "#3a3a3c"
+      },
+      transparent: {
+        css: "transparent",
+        transparent: true
+      }
+    });
+
+    const DEFAULT_SETTINGS = Object.freeze({
+      backgroundId: "liquidAurora",
+      padding: 32,
+      frameRadius: 24,
+      radius: 12,
+      shadow: 36
+    });
+
+    const UI_TEXT = Object.freeze({
+      zh: {
+        documentTitle: "SnapPolish - 截图美化与背景添加工具",
+        pageTitle: "SnapPolish",
+        introHtml: "直接按 <span class='font-mono text-cyan-200'>Cmd/Ctrl + V</span> 粘贴截图，或点击上传。所有参数实时生效，导出为高清 PNG。",
+        emptyTitle: "等待截图粘贴",
+        emptyDescHtml: "按下 Cmd+V / Ctrl+V 直接导入图片，或使用下方按钮上传。",
+        uploadBtn: "点击上传",
+        languageHeading: "语言",
+        bgHeading: "背景",
+        bgHint: "包含液态流体渐变与 Apple 风格渐变背景。",
+        paddingLabel: "边距",
+        frameRadiusLabel: "背景圆角",
+        radiusLabel: "截图圆角",
+        shadowLabel: "阴影",
+        defaultsTitle: "默认设置",
+        defaultsDesc: "恢复默认背景、边距、圆角和阴影",
+        resetBtn: "一键重置",
+        actionsHeading: "操作",
+        copyIdle: "复制图片",
+        copyCopying: "复制中...",
+        copyCopied: "已复制",
+        downloadBtn: "下载图片 (PNG)",
+        statusDefaultsRestored: "已恢复默认设置。",
+        statusImageLoaded: "图片已载入，可继续微调参数后复制或下载。",
+        statusOnlyImage: "仅支持图片文件。",
+        statusImageLoadFailed: "图片加载失败，请重试。",
+        errNoImage: "请先粘贴或上传截图。",
+        errPngFailed: "PNG 生成失败。",
+        statusCopyUnsupported: "当前环境不支持复制图片，请使用下载 PNG。",
+        statusRendering: "正在生成高清图像...",
+        statusCopied: "已写入系统剪贴板。",
+        statusCopyFailed: "复制失败，请稍后重试。",
+        statusExporting: "正在导出 PNG...",
+        statusDownloadStarted: "PNG 下载已触发。",
+        statusDownloadFailed: "下载失败，请稍后重试。",
+        statusWaitingPaste: "等待粘贴截图..."
+      },
+      en: {
+        documentTitle: "SnapPolish - Screenshot Beautifier",
+        pageTitle: "SnapPolish",
+        introHtml: "Paste with <span class='font-mono text-cyan-200'>Cmd/Ctrl + V</span> or click upload. All controls update in real time and export high-resolution PNG.",
+        emptyTitle: "Waiting for pasted screenshot",
+        emptyDescHtml: "Press Cmd+V / Ctrl+V to import an image, or use the upload button below.",
+        uploadBtn: "Upload",
+        languageHeading: "Language",
+        bgHeading: "Background",
+        bgHint: "Includes liquid gradients and Apple-inspired gradient backgrounds.",
+        paddingLabel: "Padding",
+        frameRadiusLabel: "Frame Radius",
+        radiusLabel: "Screenshot Radius",
+        shadowLabel: "Shadow",
+        defaultsTitle: "Default Settings",
+        defaultsDesc: "Restore default background, padding, radii, and shadow",
+        resetBtn: "Reset",
+        actionsHeading: "Actions",
+        copyIdle: "Copy Image",
+        copyCopying: "Copying...",
+        copyCopied: "Copied",
+        downloadBtn: "Download PNG",
+        statusDefaultsRestored: "Defaults restored.",
+        statusImageLoaded: "Image loaded. Fine-tune and then copy or download.",
+        statusOnlyImage: "Only image files are supported.",
+        statusImageLoadFailed: "Image loading failed, please try again.",
+        errNoImage: "Please paste or upload a screenshot first.",
+        errPngFailed: "Failed to generate PNG.",
+        statusCopyUnsupported: "Copying images is not supported in this environment. Please download PNG instead.",
+        statusRendering: "Rendering high-resolution image...",
+        statusCopied: "Copied to system clipboard.",
+        statusCopyFailed: "Copy failed, please try again.",
+        statusExporting: "Exporting PNG...",
+        statusDownloadStarted: "PNG download started.",
+        statusDownloadFailed: "Download failed, please try again.",
+        statusWaitingPaste: "Waiting for pasted screenshot..."
+      }
+    });
+
+    function getSavedLanguage() {
+      try {
+        const saved = localStorage.getItem("screenshot_beautifier_lang");
+        return saved && ["zh", "en"].includes(saved) ? saved : "zh";
+      } catch {
+        return "zh";
+      }
+    }
+
+    const state = {
+      backgroundId: DEFAULT_SETTINGS.backgroundId,
+      padding: DEFAULT_SETTINGS.padding,
+      frameRadius: DEFAULT_SETTINGS.frameRadius,
+      radius: DEFAULT_SETTINGS.radius,
+      shadow: DEFAULT_SETTINGS.shadow,
+      language: getSavedLanguage(),
+      copyPhase: "idle",
+      statusKey: null,
+      statusTone: "default",
+      hasImage: false,
+      objectUrl: null
+    };
+
+    const elements = {
+      pageTitle: document.getElementById("pageTitle"),
+      introText: document.getElementById("introText"),
+      emptyTitle: document.getElementById("emptyTitle"),
+      emptyDesc: document.getElementById("emptyDesc"),
+      frame: document.getElementById("frame"),
+      shotImage: document.getElementById("shotImage"),
+      emptyState: document.getElementById("emptyState"),
+      uploadTrigger: document.getElementById("uploadTrigger"),
+      uploadTriggerLabel: document.getElementById("uploadTriggerLabel"),
+      fileInput: document.getElementById("fileInput"),
+      languageHeading: document.getElementById("languageHeading"),
+      langButtons: Array.from(document.querySelectorAll(".lang-btn")),
+      bgHeading: document.getElementById("bgHeading"),
+      bgHint: document.getElementById("bgHint"),
+      bgPresets: Array.from(document.querySelectorAll(".bg-preset")),
+      paddingRange: document.getElementById("paddingRange"),
+      frameRadiusRange: document.getElementById("frameRadiusRange"),
+      radiusRange: document.getElementById("radiusRange"),
+      shadowRange: document.getElementById("shadowRange"),
+      paddingLabel: document.getElementById("paddingLabel"),
+      frameRadiusLabel: document.getElementById("frameRadiusLabel"),
+      radiusLabel: document.getElementById("radiusLabel"),
+      shadowLabel: document.getElementById("shadowLabel"),
+      paddingValue: document.getElementById("paddingValue"),
+      frameRadiusValue: document.getElementById("frameRadiusValue"),
+      radiusValue: document.getElementById("radiusValue"),
+      shadowValue: document.getElementById("shadowValue"),
+      defaultsTitle: document.getElementById("defaultsTitle"),
+      defaultsDesc: document.getElementById("defaultsDesc"),
+      resetBtn: document.getElementById("resetBtn"),
+      resetBtnLabel: document.getElementById("resetBtnLabel"),
+      resetTrack: document.getElementById("resetTrack"),
+      resetKnob: document.getElementById("resetKnob"),
+      actionsHeading: document.getElementById("actionsHeading"),
+      copyBtn: document.getElementById("copyBtn"),
+      copyBtnLabel: document.getElementById("copyBtnLabel"),
+      downloadBtn: document.getElementById("downloadBtn"),
+      downloadBtnLabel: document.getElementById("downloadBtnLabel"),
+      statusText: document.getElementById("statusText")
+    };
+
+    let resetAnimationTimer = null;
+
+    function getActiveBackgroundPreset() {
+      return BACKGROUND_PRESETS[state.backgroundId] || BACKGROUND_PRESETS[DEFAULT_SETTINGS.backgroundId];
+    }
+
+    function getText(key) {
+      const languagePack = UI_TEXT[state.language] || UI_TEXT.zh;
+      return languagePack[key] || UI_TEXT.zh[key] || "";
+    }
+
+    function setCopyPhase(nextPhase) {
+      state.copyPhase = nextPhase;
+      if (nextPhase === "copying") {
+        elements.copyBtnLabel.textContent = getText("copyCopying");
+        return;
+      }
+      if (nextPhase === "copied") {
+        elements.copyBtnLabel.textContent = getText("copyCopied");
+        return;
+      }
+      elements.copyBtnLabel.textContent = getText("copyIdle");
+    }
+
+    function setStatus(message, tone = "default") {
+      elements.statusText.textContent = message;
+      elements.statusText.className = "min-h-[20px] text-xs";
+      if (tone === "error") {
+        elements.statusText.classList.add("text-rose-300");
+      } else if (tone === "success") {
+        elements.statusText.classList.add("text-emerald-300");
+      } else {
+        elements.statusText.classList.add("text-slate-300/85");
+      }
+    }
+
+    function setStatusKey(key, tone = "default") {
+      state.statusKey = key;
+      state.statusTone = tone;
+      setStatus(getText(key), tone);
+    }
+
+    function setStatusCustom(message, tone = "default") {
+      state.statusKey = null;
+      state.statusTone = tone;
+      setStatus(message, tone);
+    }
+
+    function resolveErrorMessage(error, fallbackKey) {
+      if (!error || !error.message) return getText(fallbackKey);
+
+      if (error.message === "ERR_NO_IMAGE") return getText("errNoImage");
+      if (error.message === "ERR_PNG_FAILED") return getText("errPngFailed");
+
+      return error.message;
+    }
+
+    function syncLanguageButtons() {
+      elements.langButtons.forEach((button) => {
+        const active = button.dataset.lang === state.language;
+        button.classList.toggle("ring-2", active);
+        button.classList.toggle("ring-cyan-300", active);
+        button.classList.toggle("bg-cyan-400/20", active);
+        button.classList.toggle("border-cyan-300/40", active);
+      });
+    }
+
+    function applyLanguage() {
+      document.title = getText("documentTitle");
+
+      elements.pageTitle.textContent = getText("pageTitle");
+      elements.introText.innerHTML = getText("introHtml");
+      elements.emptyTitle.textContent = getText("emptyTitle");
+      elements.emptyDesc.innerHTML = getText("emptyDescHtml");
+      elements.uploadTriggerLabel.textContent = getText("uploadBtn");
+
+      elements.languageHeading.textContent = getText("languageHeading");
+
+      elements.bgHeading.textContent = getText("bgHeading");
+      elements.bgHint.textContent = getText("bgHint");
+      elements.paddingLabel.textContent = getText("paddingLabel");
+      elements.frameRadiusLabel.textContent = getText("frameRadiusLabel");
+      elements.radiusLabel.textContent = getText("radiusLabel");
+      elements.shadowLabel.textContent = getText("shadowLabel");
+      elements.defaultsTitle.textContent = getText("defaultsTitle");
+      elements.defaultsDesc.textContent = getText("defaultsDesc");
+      elements.resetBtnLabel.textContent = getText("resetBtn");
+      elements.actionsHeading.textContent = getText("actionsHeading");
+      elements.downloadBtnLabel.textContent = getText("downloadBtn");
+
+      setCopyPhase(state.copyPhase);
+      syncLanguageButtons();
+
+      if (state.statusKey) {
+        setStatus(getText(state.statusKey), state.statusTone);
+      }
+
+      try {
+        localStorage.setItem("screenshot_beautifier_lang", state.language);
+      } catch {
+        // Ignore localStorage failures in restricted contexts.
+      }
+    }
+
+    function makeShadow(depth) {
+      const amount = Number(depth);
+      if (amount <= 0) return "none";
+
+      const y = Math.round(amount * 0.62);
+      const blur = Math.round(14 + amount * 2.3);
+      const spread = Math.round(amount * 0.12);
+      const alphaMain = Math.min(0.52, 0.14 + amount / 180);
+      const alphaSoft = Math.min(0.28, 0.08 + amount / 260);
+
+      return `0 ${y}px ${blur}px ${spread}px rgba(15, 23, 42, ${alphaMain}), 0 ${Math.round(amount * 0.45)}px ${Math.round(amount * 1.1)}px 0 rgba(2, 6, 23, ${alphaSoft})`;
+    }
+
+    function syncButtons() {
+      elements.copyBtn.disabled = !state.hasImage;
+      elements.downloadBtn.disabled = !state.hasImage;
+    }
+
+    function syncControlValues() {
+      elements.paddingValue.textContent = `${state.padding}px`;
+      elements.frameRadiusValue.textContent = `${state.frameRadius}px`;
+      elements.radiusValue.textContent = `${state.radius}px`;
+      elements.shadowValue.textContent = `${state.shadow}`;
+    }
+
+    function syncControlInputs() {
+      elements.paddingRange.value = String(state.padding);
+      elements.frameRadiusRange.value = String(state.frameRadius);
+      elements.radiusRange.value = String(state.radius);
+      elements.shadowRange.value = String(state.shadow);
+    }
+
+    function applyFrameRadius(rawValue) {
+      const parsedValue = Number(rawValue);
+      if (!Number.isFinite(parsedValue)) return;
+
+      const clampedValue = Math.min(80, Math.max(0, Math.round(parsedValue)));
+      state.frameRadius = clampedValue;
+      elements.frameRadiusRange.value = String(clampedValue);
+      elements.frameRadiusValue.textContent = `${clampedValue}px`;
+      elements.frame.style.borderRadius = `${clampedValue}px`;
+    }
+
+    function syncPresetHighlight() {
+      elements.bgPresets.forEach((button) => {
+        const active = button.dataset.bgId === state.backgroundId;
+        button.classList.toggle("ring-2", active);
+        button.classList.toggle("ring-cyan-300", active);
+        button.classList.toggle("ring-offset-1", active);
+        button.classList.toggle("ring-offset-slate-900", active);
+      });
+    }
+
+    function applyStyles() {
+      const preset = getActiveBackgroundPreset();
+
+      elements.frame.style.padding = `${state.padding}px`;
+      elements.frame.style.background = preset.css;
+      applyFrameRadius(state.frameRadius);
+      elements.shotImage.style.borderRadius = `${state.radius}px`;
+      elements.shotImage.style.boxShadow = makeShadow(state.shadow);
+
+      if (preset.transparent) {
+        elements.frame.classList.add("ring-1", "ring-white/20");
+      } else {
+        elements.frame.classList.remove("ring-1", "ring-white/20");
+      }
+
+      syncControlValues();
+      syncPresetHighlight();
+    }
+
+    function resetToDefaults(showFeedback = true) {
+      state.backgroundId = DEFAULT_SETTINGS.backgroundId;
+      state.padding = DEFAULT_SETTINGS.padding;
+      state.frameRadius = DEFAULT_SETTINGS.frameRadius;
+      state.radius = DEFAULT_SETTINGS.radius;
+      state.shadow = DEFAULT_SETTINGS.shadow;
+      syncControlInputs();
+      applyStyles();
+
+      if (showFeedback) {
+        setStatusKey("statusDefaultsRestored", "success");
+      }
+    }
+
+    function playResetSwitchAnimation() {
+      if (resetAnimationTimer) {
+        clearTimeout(resetAnimationTimer);
+      }
+
+      elements.resetTrack.classList.remove("bg-slate-600/80");
+      elements.resetTrack.classList.add("bg-cyan-400/70");
+      elements.resetKnob.classList.add("translate-x-5");
+
+      resetAnimationTimer = setTimeout(() => {
+        elements.resetKnob.classList.remove("translate-x-5");
+        elements.resetTrack.classList.remove("bg-cyan-400/70");
+        elements.resetTrack.classList.add("bg-slate-600/80");
+      }, 420);
+    }
+
+    function onImageLoaded() {
+      state.hasImage = true;
+      elements.emptyState.classList.add("hidden");
+      elements.shotImage.classList.remove("hidden");
+      syncButtons();
+      applyStyles();
+      setStatusKey("statusImageLoaded");
+    }
+
+    function loadImage(file) {
+      if (!file || !file.type || !file.type.startsWith("image/")) {
+        setStatusKey("statusOnlyImage", "error");
+        return;
+      }
+
+      if (state.objectUrl) {
+        URL.revokeObjectURL(state.objectUrl);
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      state.objectUrl = objectUrl;
+      elements.shotImage.onload = onImageLoaded;
+      elements.shotImage.onerror = () => setStatusKey("statusImageLoadFailed", "error");
+      elements.shotImage.src = objectUrl;
+    }
+
+    async function renderToCanvas() {
+      if (!state.hasImage) {
+        throw new Error("ERR_NO_IMAGE");
+      }
+
+      const scale = Math.max(2, window.devicePixelRatio || 1);
+      return html2canvas(elements.frame, {
+        backgroundColor: null,
+        scale,
+        useCORS: true,
+        logging: false
+      });
+    }
+
+    async function canvasToBlob(canvas) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("ERR_PNG_FAILED"));
+            return;
+          }
+          resolve(blob);
+        }, "image/png");
+      });
+    }
+
+    async function handleCopy() {
+      if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+        setStatusKey("statusCopyUnsupported", "error");
+        return;
+      }
+
+      elements.copyBtn.disabled = true;
+      setCopyPhase("copying");
+      setStatusKey("statusRendering");
+
+      try {
+        const canvas = await renderToCanvas();
+        const blob = await canvasToBlob(canvas);
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+
+        setCopyPhase("copied");
+        elements.copyBtn.classList.add("copy-success");
+        setStatusKey("statusCopied", "success");
+
+        setTimeout(() => {
+          elements.copyBtn.classList.remove("copy-success");
+          setCopyPhase("idle");
+          syncButtons();
+        }, 1200);
+      } catch (error) {
+        setCopyPhase("idle");
+        syncButtons();
+        setStatusCustom(resolveErrorMessage(error, "statusCopyFailed"), "error");
+      }
+    }
+
+    async function handleDownload() {
+      elements.downloadBtn.disabled = true;
+      setStatusKey("statusExporting");
+
+      try {
+        const canvas = await renderToCanvas();
+        const url = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `beautified-shot-${Date.now()}.png`;
+        link.click();
+        setStatusKey("statusDownloadStarted", "success");
+      } catch (error) {
+        setStatusCustom(resolveErrorMessage(error, "statusDownloadFailed"), "error");
+      } finally {
+        syncButtons();
+      }
+    }
+
+    elements.uploadTrigger.addEventListener("click", () => elements.fileInput.click());
+    elements.fileInput.addEventListener("change", (event) => {
+      const [file] = event.target.files || [];
+      loadImage(file);
+      event.target.value = "";
+    });
+
+    window.addEventListener("paste", (event) => {
+      const items = event.clipboardData?.items || [];
+      for (const item of items) {
+        if (item.type && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            loadImage(file);
+          }
+          return;
+        }
+      }
+    });
+
+    elements.langButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextLanguage = button.dataset.lang;
+        if (!["zh", "en"].includes(nextLanguage)) return;
+        state.language = nextLanguage;
+        applyLanguage();
+      });
+    });
+
+    elements.bgPresets.forEach((button) => {
+      button.addEventListener("click", () => {
+        const presetId = button.dataset.bgId;
+        if (!BACKGROUND_PRESETS[presetId]) return;
+        state.backgroundId = presetId;
+        applyStyles();
+      });
+    });
+
+    elements.paddingRange.addEventListener("input", (event) => {
+      state.padding = Number(event.target.value);
+      applyStyles();
+    });
+
+    const handleFrameRadiusChange = (event) => {
+      const nextValue = Number.isFinite(event.currentTarget.valueAsNumber)
+        ? event.currentTarget.valueAsNumber
+        : event.currentTarget.value;
+      applyFrameRadius(nextValue);
+    };
+
+    elements.frameRadiusRange.addEventListener("input", handleFrameRadiusChange);
+    elements.frameRadiusRange.addEventListener("change", handleFrameRadiusChange);
+
+    elements.radiusRange.addEventListener("input", (event) => {
+      state.radius = Number(event.target.value);
+      applyStyles();
+    });
+
+    elements.shadowRange.addEventListener("input", (event) => {
+      state.shadow = Number(event.target.value);
+      applyStyles();
+    });
+
+    elements.resetBtn.addEventListener("click", () => {
+      resetToDefaults(true);
+      playResetSwitchAnimation();
+    });
+
+    elements.copyBtn.addEventListener("click", handleCopy);
+    elements.downloadBtn.addEventListener("click", handleDownload);
+
+    applyLanguage();
+    resetToDefaults(false);
+    syncButtons();
+    setStatusKey("statusWaitingPaste");
+
+    window.addEventListener("beforeunload", () => {
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      if (resetAnimationTimer) clearTimeout(resetAnimationTimer);
+    });
+  </script>
+</body>
+</html>
