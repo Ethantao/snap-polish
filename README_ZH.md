@@ -4,7 +4,7 @@
 
 [English Version](README.md) | [**在线体验**](https://ethantao.github.io/snap-polish/)
 
-[在这里添加工具截图]
+![SnapPolish Screenshot](assets/screenshot_zh.png)
 
 ## 简介
 
