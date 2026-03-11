@@ -365,7 +365,7 @@
         statusImageLoadFailed: "图片加载失败，请重试。",
         errNoImage: "请先粘贴或上传截图。",
         errPngFailed: "PNG 生成失败。",
-        statusCopyUnsupported: "当前环境不支持复制图片，请使用下载 PNG。",
+        statusCopyUnsupported: "当前环境不支持复制图片，请使用下载 PNG（Safari 请在 HTTPS 或 localhost 下使用）。",
         statusRendering: "正在生成高清图像...",
         statusCopied: "已写入系统剪贴板。",
         statusCopyFailed: "复制失败，请稍后重试。",
@@ -402,7 +402,7 @@
         statusImageLoadFailed: "Image loading failed, please try again.",
         errNoImage: "Please paste or upload a screenshot first.",
         errPngFailed: "Failed to generate PNG.",
-        statusCopyUnsupported: "Copying images is not supported in this environment. Please download PNG instead.",
+        statusCopyUnsupported: "Image copy is unavailable in this environment. Use Download PNG instead (Safari requires HTTPS or localhost).",
         statusRendering: "Rendering high-resolution image...",
         statusCopied: "Copied to system clipboard.",
         statusCopyFailed: "Copy failed, please try again.",
@@ -728,7 +728,8 @@
           backgroundColor: null,
           scale: scale,
           useCORS: true,
-          logging: false
+          logging: false,
+          ignoreElements: (element) => element.id === "emptyState"
         });
         return canvas;
       } finally {
@@ -750,6 +751,50 @@
       });
     }
 
+    function canWriteImageToClipboard() {
+      const ClipboardItemCtor = window.ClipboardItem;
+      if (!navigator.clipboard || typeof navigator.clipboard.write !== "function") return false;
+      if (typeof ClipboardItemCtor === "undefined") return false;
+      if (typeof ClipboardItemCtor.supports === "function" && !ClipboardItemCtor.supports("image/png")) return false;
+      return true;
+    }
+
+    async function copyImageBlobToClipboard(blob) {
+      if (!canWriteImageToClipboard()) {
+        throw new Error("ERR_COPY_UNSUPPORTED");
+      }
+
+      const ClipboardItemCtor = window.ClipboardItem;
+      let item;
+
+      try {
+        item = new ClipboardItemCtor({ "image/png": blob });
+      } catch {
+        // Safari compatibility: some versions accept Promise<Blob> more reliably.
+        item = new ClipboardItemCtor({ "image/png": Promise.resolve(blob) });
+      }
+
+      await navigator.clipboard.write([item]);
+    }
+
+    function triggerPngDownload(blob, fileName) {
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      link.rel = "noopener";
+
+      if ("download" in link) {
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        window.open(blobUrl, "_blank", "noopener");
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    }
+
     async function handleCopy() {
       if (!state.hasImage) return;
 
@@ -760,10 +805,7 @@
       try {
         const canvas = await renderToCanvas();
         const blob = await canvasToBlob(canvas);
-
-        // 尝试写入剪贴板
-        const item = new ClipboardItem({ "image/png": blob });
-        await navigator.clipboard.write([item]);
+        await copyImageBlobToClipboard(blob);
 
         setCopyPhase("copied");
         elements.copyBtn.classList.add("copy-success");
@@ -776,18 +818,16 @@
         }, 1200);
 
       } catch (error) {
-        console.error("Copy failed:", error);
         setCopyPhase("idle");
         syncButtons();
 
-        // 针对 Safari 或其他浏览器拒绝权限的情况，自动降级为下载
-        if (error.name === "NotAllowedError" || error.message.includes("not allowed")) {
-          setStatusCustom(getText("statusCopyUnsupported"), "error");
-          // 延迟一下自动触发下载，体验更好
-          setTimeout(() => handleDownload(), 1500);
-        } else {
-          setStatusCustom(resolveErrorMessage(error, "statusCopyFailed"), "error");
+        const unsupportedNames = new Set(["NotAllowedError", "SecurityError", "DataError"]);
+        if (error.message === "ERR_COPY_UNSUPPORTED" || unsupportedNames.has(error.name)) {
+          setStatusKey("statusCopyUnsupported", "error");
+          return;
         }
+
+        setStatusCustom(resolveErrorMessage(error, "statusCopyFailed"), "error");
       }
     }
 
@@ -797,11 +837,8 @@
 
       try {
         const canvas = await renderToCanvas();
-        const url = canvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `beautified-shot-${Date.now()}.png`;
-        link.click();
+        const blob = await canvasToBlob(canvas);
+        triggerPngDownload(blob, `snap-polish-${Date.now()}.png`);
         setStatusKey("statusDownloadStarted", "success");
       } catch (error) {
         setStatusCustom(resolveErrorMessage(error, "statusDownloadFailed"), "error");
