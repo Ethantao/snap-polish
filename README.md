@@ -2,7 +2,7 @@
 
 **Clipboard-first screenshot beautifier for polished sharing.**
 
-[中文版本](README_ZH.md) | [**Live Demo**](https://ethantao.github.io/snap-polish/)
+[中文版本](README_ZH.md) | [**Live Demo**](https://realyanming.github.io/snap-polish/)
 
 ![SnapPolish Screenshot](assets/screenshot_en.png)
 

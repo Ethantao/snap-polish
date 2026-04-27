@@ -2,7 +2,7 @@
 
 **剪贴板优先的截图美化工具，让分享更具质感。**
 
-[English Version](README.md) | [**在线体验**](https://ethantao.github.io/snap-polish/)
+[English Version](README.md) | [**在线体验**](https://realyanming.github.io/snap-polish/)
 
 ![SnapPolish Screenshot](assets/screenshot_zh.png)
 
