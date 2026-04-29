@@ -51,6 +51,6 @@ npx serve .
 
 ## 开源协议
 
-MIT © [SnapPolish](https://github.com/Ethantao/snap-polish)
+MIT © [SnapPolish](https://github.com/realYanming/snap-polish)
 
 Created by [@realYanming](https://x.com/realYanming)
