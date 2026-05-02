@@ -768,7 +768,21 @@
       });
     }
 
-    function drawShotImage(canvas, metrics) {
+    function createShotImageCanvas() {
+      const sourceCanvas = document.createElement("canvas");
+      sourceCanvas.width = elements.shotImage.naturalWidth;
+      sourceCanvas.height = elements.shotImage.naturalHeight;
+
+      const sourceContext = sourceCanvas.getContext("2d");
+      if (!sourceContext) {
+        throw new Error("ERR_PNG_FAILED");
+      }
+
+      sourceContext.drawImage(elements.shotImage, 0, 0);
+      return sourceCanvas;
+    }
+
+    function drawShotImage(canvas, metrics, sourceCanvas) {
       const context = canvas.getContext("2d");
       if (!context) {
         throw new Error("ERR_PNG_FAILED");
@@ -787,7 +801,7 @@
       context.save();
       drawRoundedRectPath(context, x, y, width, height, radius);
       context.clip();
-      context.drawImage(elements.shotImage, x, y, width, height);
+      context.drawImage(sourceCanvas, x, y, width, height);
       context.restore();
     }
 
@@ -804,6 +818,7 @@
       }
 
       await ensureShotImageReady();
+      const sourceCanvas = createShotImageCanvas();
 
       const frameRect = elements.frame.getBoundingClientRect();
       const imageRect = elements.shotImage.getBoundingClientRect();
@@ -837,7 +852,7 @@
         drawShotImage(canvas, {
           frame: frameRect,
           image: imageRect
-        });
+        }, sourceCanvas);
         return canvas;
       } finally {
         // 恢复样式
