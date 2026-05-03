@@ -20,13 +20,13 @@ SnapPolish is a lightweight, single-file frontend tool designed to turn raw scre
 - **High-Quality Export**:
   - Copy to clipboard as PNG (perfect for Twitter/X, Slack, Notion).
   - Download as high-res PNG.
-- **Lightweight**: Zero dependencies using CDN for Tailwind CSS and html2canvas.
+- **Lightweight**: Single-file app using Tailwind CSS via CDN and native Canvas export.
 
 ## Tech Stack
 
 - **HTML5 & Vanilla JS**
 - **Tailwind CSS** (via CDN)
-- **html2canvas** (for rendering)
+- **Canvas API** (for rendering)
 
 ## Usage
 

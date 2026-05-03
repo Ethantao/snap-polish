@@ -20,13 +20,13 @@ SnapPolish 是一个轻量级的纯前端工具，旨在瞬间将原始截图转
 - **高清导出**：
   - 复制为 PNG 到剪贴板（完美适配 Twitter/X, Slack, Notion）。
   - 下载为高清 PNG。
-- **轻量级**：零依赖，通过 CDN 加载 Tailwind CSS 和 html2canvas。
+- **轻量级**：单文件应用，通过 CDN 加载 Tailwind CSS，使用原生 Canvas 导出。
 
 ## 技术栈
 
 - **HTML5 & 原生 JS** (Vanilla JS)
 - **Tailwind CSS** (via CDN)
-- **html2canvas** (渲染引擎)
+- **Canvas API** (渲染引擎)
 
 ## 使用方法
 
